@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#1b1033">
+<title>Slime Farm Idle</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+body{margin:0;font-family:system-ui,sans-serif;background:radial-gradient(circle at 50% 20%,#3a1f6b,#1b1033 70%);color:#fff;min-height:100vh;overflow-x:hidden}
+header{text-align:center;padding:14px 10px 0}
+#goo{font-size:2.4rem;font-weight:900;text-shadow:0 3px 0 #0006}
+#gps{opacity:.8;font-size:.95rem}
+#stage{position:relative;height:260px;display:flex;align-items:center;justify-content:center}
+#slime{width:180px;height:150px;border-radius:50% 50% 45% 45%/60% 60% 40% 40%;background:radial-gradient(circle at 35% 30%,#b6ffb0,#3ddc63 45%,#1e8f3a);box-shadow:inset -10px -14px 0 #0003,0 18px 30px #0007;position:relative;animation:wob 2.4s ease-in-out infinite;cursor:pointer;transition:filter .2s}
+#slime:before,#slime:after{content:"";position:absolute;top:50px;width:22px;height:30px;background:#111;border-radius:50%;box-shadow:inset 5px 5px 0 #fff}
+#slime:before{left:50px}#slime:after{right:50px}
+#slime.squish{animation:squish .15s}
+@keyframes wob{50%{transform:scale(1.05,.95)}}
+@keyframes squish{50%{transform:scale(1.25,.75)}}
+.pop{position:absolute;font-weight:900;pointer-events:none;animation:up 1s forwards;text-shadow:0 2px 0 #000a}
+@keyframes up{to{transform:translateY(-90px);opacity:0}}
+.drop{position:absolute;width:12px;height:12px;border-radius:50%;background:#5f5;pointer-events:none}
+#gold{position:fixed;font-size:3rem;display:none;z-index:5;animation:wob 1s infinite;cursor:pointer;filter:drop-shadow(0 0 12px gold)}
+#tabs{display:flex;gap:6px;padding:0 10px}
+#tabs button{flex:1;padding:10px;border:0;border-radius:12px 12px 0 0;background:#2a1850;color:#ccc;font-weight:700}
+#tabs button.on{background:#3b2370;color:#fff}
+#list{background:#3b2370;margin:0 10px 20px;border-radius:0 0 14px 14px;padding:8px}
+.item{display:flex;align-items:center;gap:10px;background:#0003;border-radius:12px;padding:10px;margin:6px 0;transition:opacity .2s}
+.item.no{opacity:.45}
+.item .ic{font-size:2rem;width:44px;text-align:center}
+.item .tx{flex:1}.item b{display:block}.item small{opacity:.75}
+.item .cost{font-weight:800;color:#8f8}
+.item .n{font-size:1.4rem;font-weight:900;opacity:.6}
+#toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#fd0;color:#000;padding:8px 14px;border-radius:20px;font-weight:800;display:none;z-index:9}
+#buff{text-align:center;color:#fd0;font-weight:800;min-height:1.2em}
+</style></head><body>
+<header><div id="goo">0</div><div id="gps">0 goo/sec</div><div id="buff"></div></header>
+<div id="stage"><div id="slime"></div></div>
+<div id="gold">✨</div>
+<div id="tabs"><button class="on" data-t="b">🏠 Farm</button><button data-t="u">⚡ Upgrades</button><button data-t="p">🌌 Ascend</button></div>
+<div id="list"></div>
+<div id="toast"></div>
+<script>
+const B=[
+["Baby Slime","🟢",15,.1],["Slime Pond","💧",100,1],["Goo Pump","⛽",1100,8],["Slime Ranch","🐄",12e3,47],
+["Gloop Factory","🏭",13e4,260],["Ooze Bank","🏦",14e5,1400],["Slime Wizard","🧙",2e7,7800],["Goo Portal","🌀",33e7,44e3],
+["Slime Planet","🪐",5e9,26e4],["Gelatin God","👑",75e9,16e5]];
+const U=[
+["Sticky Fingers","👆",100,"Tap x2",s=>s.tap*=2],["Goo Gloves","🧤",500,"Tap x2",s=>s.tap*=2],
+["Pond Filters","🧽",1000,"Ponds x2",s=>s.m[1]*=2],["Baby Food","🍼",200,"Babies x2",s=>s.m[0]*=2],
+["Tap Power","💪",1e4,"Taps +1% of goo/sec",s=>s.tapPct+=.01],["Turbo Pumps","🚀",15e3,"Pumps x2",s=>s.m[2]*=2],
+["Ranch Hands","🤠",1.5e5,"Ranches x2",s=>s.m[3]*=2],["Golden Luck","🍀",5e4,"Gold slimes 2x often",s=>s.luck*=2],
+["Everything Goo","🌈",1e6,"All x1.5",s=>s.all*=1.5],["Factory OT","⏰",2e6,"Factories x2",s=>s.m[4]*=2],
+["Mega Tap","🔨",5e6,"Taps +3% goo/sec",s=>s.tapPct+=.03],["Compound Ooze","📈",2e7,"Banks x2",s=>s.m[5]*=2],
+["Arcane Gloop","🔮",3e8,"Wizards x2",s=>s.m[6]*=2],["Cosmic Slime","☄️",1e9,"All x2",s=>s.all*=2],
+["Portal Tuning","🎛️",5e9,"Portals x2",s=>s.m[7]*=2],["Planet Core","🌋",8e10,"Planets x2",s=>s.m[8]*=2],
+["Divine Jelly","😇",1e12,"Gods x2, all x2",s=>{s.m[9]*=2;s.all*=2}]];
+let S={goo:0,total:0,owned:B.map(()=>0),ups:[],stars:0,t:Date.now()};
+try{Object.assign(S,JSON.parse(localStorage.slimeIdle||"{}"))}catch(e){}
+let tab="b",mult={},buffT=0,buffX=1,tapBuffT=0;
+const $=id=>document.getElementById(id);
+const f=n=>{if(n<1e3)return n<10?(+n.toFixed(1)).toString():Math.floor(n).toString();const u=["K","M","B","T","Qa","Qi","Sx","Sp","Oc"];let i=-1;while(n>=1e3&&i<u.length-1){n/=1e3;i++}return n.toFixed(2)+u[i]};
+function calc(){mult={tap:1,tapPct:0,luck:1,all:1,m:B.map(()=>1)};S.ups.forEach(i=>U[i][4](mult));}
+function cost(i){return Math.ceil(B[i][2]*1.15**S.owned[i])}
+function gps(){let g=0;B.forEach((b,i)=>g+=b[3]*S.owned[i]*mult.m[i]);return g*mult.all*(1+S.stars*.05)*buffX}
+function tapVal(){return (1+mult.tapPct*gps())*mult.tap*(1+S.stars*.05)*(tapBuffT>0?7:1)}
+function toast(t){const e=$("toast");e.textContent=t;e.style.display="block";clearTimeout(e.h);e.h=setTimeout(()=>e.style.display="none",2500)}
+function add(n){S.goo+=n;S.total+=n}
+$("slime").addEventListener("pointerdown",e=>{
+  const v=tapVal();add(v);const s=$("slime");s.classList.remove("squish");void s.offsetWidth;s.classList.add("squish");
+  navigator.vibrate&&navigator.vibrate(8);
+  const r=$("stage").getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  const p=document.createElement("div");p.className="pop";p.textContent="+"+f(v);p.style.left=x-20+"px";p.style.top=y-30+"px";$("stage").appendChild(p);setTimeout(()=>p.remove(),1000);
+  for(let k=0;k<4;k++){const d=document.createElement("div");d.className="drop";d.style.left=x+"px";d.style.top=y+"px";$("stage").appendChild(d);
+    const a=Math.random()*6.28,sp=40+Math.random()*50;d.animate([{transform:"translate(0,0)"},{transform:`translate(${Math.cos(a)*sp}px,${Math.sin(a)*sp+60}px)`,opacity:0}],{duration:600}).onfinish=()=>d.remove();}
+  render();
+});
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x==b));render(true)});
+function starsGain(){return Math.floor(Math.sqrt(S.total/1e9))-S.stars}
+function render(full){
+  $("goo").textContent=f(S.goo)+" 🟢";$("gps").textContent=f(gps())+" goo/sec · tap "+f(tapVal());
+  $("buff").textContent=buffT>0?`🔥 GOO FRENZY x${buffX} (${Math.ceil(buffT)}s)`:tapBuffT>0?`👆 TAP FRENZY x7 (${Math.ceil(tapBuffT)}s)`:S.stars?`🌌 ${S.stars} stars (+${S.stars*5}%)`:"";
+  const L=$("list");
+  if(full||L.dataset.t!=tab){L.dataset.t=tab;L.innerHTML="";
+    if(tab=="b")B.forEach((b,i)=>{const d=document.createElement("div");d.className="item";d.innerHTML=`<div class=ic>${b[1]}</div><div class=tx><b>${b[0]}</b><small></small><div class=cost></div></div><div class=n></div>`;d.onclick=()=>{const c=cost(i);if(S.goo>=c){S.goo-=c;S.owned[i]++;render()}};L.appendChild(d)});
+    if(tab=="u")U.forEach((u,i)=>{if(S.ups.includes(i))return;const d=document.createElement("div");d.className="item";d.dataset.i=i;d.innerHTML=`<div class=ic>${u[1]}</div><div class=tx><b>${u[0]}</b><small>${u[3]}</small><div class=cost>${f(u[2])}</div></div>`;d.onclick=()=>{if(S.goo>=u[2]){S.goo-=u[2];S.ups.push(i);calc();toast(u[1]+" "+u[0]+"!");render(true)}};L.appendChild(d)});
+    if(tab=="p"){const d=document.createElement("div");d.className="item";d.innerHTML=`<div class=ic>🌌</div><div class=tx><b>Ascend</b><small>Reset goo, farm & upgrades. Each star = +5% everything forever.</small><div class=cost></div></div>`;d.onclick=()=>{const g=starsGain();if(g>0&&confirm(`Ascend for ${g} stars?`)){S={goo:0,total:S.total,owned:B.map(()=>0),ups:[],stars:S.stars+g,t:Date.now()};calc();toast("🌌 +"+g+" stars!");render(true)}};L.appendChild(d)}
+  }
+  [...L.children].forEach((d,i)=>{
+    if(tab=="b"){const hidden=i>0&&S.owned[i-1]==0&&S.owned[i]==0;d.style.display=hidden&&i>1&&S.owned[i-2]==0?"none":"";const c=cost(i);d.classList.toggle("no",S.goo<c);
+      d.querySelector(".cost").textContent=f(c);d.querySelector(".n").textContent=S.owned[i]||"";d.querySelector("small").textContent=f(B[i][3]*mult.m[i]*mult.all)+"/s each";}
+    if(tab=="u")d.classList.toggle("no",S.goo<U[d.dataset.i][2]);
+    if(tab=="p"){const g=starsGain();d.classList.toggle("no",g<1);d.querySelector(".cost").textContent=g>0?`+${g} stars`:`Need ${f(((S.stars+1)**2)*1e9)} lifetime goo`;}
+  });
+}
+// golden slime
+let goldNext=30+Math.random()*60;
+$("gold").onclick=()=>{$("gold").style.display="none";const r=Math.random();
+  if(r<.45){buffX=7;buffT=30;toast("🔥 Goo Frenzy! x7 for 30s")}else if(r<.75){tapBuffT=15;toast("👆 Tap Frenzy! x7 taps")}else{const g=Math.max(gps()*600,S.goo*.15)+13;add(g);toast("💰 Lucky! +"+f(g))}};
+calc();
+// offline
+const off=Math.min((Date.now()-S.t)/1e3,8*3600);if(off>60){const g=gps()*off*.5;if(g>0){add(g);setTimeout(()=>toast("😴 Welcome back! +"+f(g)+" goo"),300)}}
+let last=performance.now(),acc=0;
+function loop(t){const dt=Math.min((t-last)/1e3,1);last=t;add(gps()*dt);
+  if(buffT>0&&(buffT-=dt)<=0)buffX=1;if(tapBuffT>0)tapBuffT-=dt;
+  goldNext-=dt*mult.luck;if(goldNext<=0){goldNext=40+Math.random()*80;const g=$("gold");g.style.left=20+Math.random()*(innerWidth-100)+"px";g.style.top=80+Math.random()*(innerHeight*.5)+"px";g.style.display="block";setTimeout(()=>g.style.display="none",9000)}
+  if((acc+=dt)>.1){acc=0;render()}requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+setInterval(()=>{S.t=Date.now();localStorage.slimeIdle=JSON.stringify(S)},3000);
+addEventListener("visibilitychange",()=>{S.t=Date.now();localStorage.slimeIdle=JSON.stringify(S)});
+render(true);
+</script></body></html>
